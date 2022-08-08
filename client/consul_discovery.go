@@ -1,11 +1,12 @@
 package client
 
 import (
+	"fmt"
+	consulapi "github.com/hashicorp/consul/api"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/rpcxio/libkv"
 	"github.com/rpcxio/libkv/store"
 	"github.com/rpcxio/libkv/store/consul"
 	"github.com/smallnest/rpcx/client"
@@ -35,77 +36,40 @@ type ConsulDiscovery struct {
 
 // NewConsulDiscovery returns a new ConsulDiscovery.
 func NewConsulDiscovery(basePath, servicePath string, consulAddr []string, options *store.Config) (*ConsulDiscovery, error) {
-	kv, err := libkv.NewStore(store.CONSUL, consulAddr, options)
+	// 创建连接consul服务配置
+	config := consulapi.DefaultConfig()
+	config.Address = consulAddr[0]
+	cc, err := consulapi.NewClient(config)
 	if err != nil {
-		log.Infof("cannot create store: %v", err)
-		return nil, err
+		log.Fatal("consul client error : ", err)
 	}
-
-	return NewConsulDiscoveryStore(basePath+"/"+servicePath, kv)
-}
-
-// NewConsulDiscoveryStore returns a new ConsulDiscovery with specified store.
-func NewConsulDiscoveryStore(basePath string, kv store.Store) (*ConsulDiscovery, error) {
-	if basePath[0] == '/' {
-		basePath = basePath[1:]
-	}
-
-	if len(basePath) > 1 && strings.HasSuffix(basePath, "/") {
-		basePath = basePath[:len(basePath)-1]
-	}
-
-	d := &ConsulDiscovery{basePath: basePath, kv: kv}
-	d.stopCh = make(chan struct{})
-
-	ps, err := kv.List(basePath)
-	if err != nil && err != store.ErrKeyNotFound {
-		log.Infof("cannot get services of from registry: %v, err: %v", basePath, err)
-		return nil, err
-	}
-
-	pairs := make([]*client.KVPair, 0, len(ps))
-	prefix := d.basePath + "/"
-	for _, p := range ps {
-		if !strings.HasPrefix(p.Key, prefix) { // avoid prefix issue of consul List
-			continue
+	// 获取所有service
+	services, _ := cc.Agent().Services()
+	pairs := make([]*client.KVPair, 0, 0)
+	for _, value := range services {
+		fmt.Println("address:", value.Address)
+		fmt.Println("port:", value.Port)
+		if value.Service == servicePath {
+			kvp := client.KVPair{Key: value.SocketPath, Value: value.ID}
+			pairs = append(
+				pairs,
+				&kvp,
+			)
 		}
-		k := strings.TrimPrefix(p.Key, prefix)
-		pair := &client.KVPair{Key: k, Value: string(p.Value)}
-		if d.filter != nil && !d.filter(pair) {
-			continue
-		}
-		pairs = append(pairs, pair)
 	}
+
+	fmt.Println("=================================")
+	d := &ConsulDiscovery{}
 	d.pairsMu.Lock()
 	d.pairs = pairs
 	d.pairsMu.Unlock()
-	d.RetriesAfterWatchFailed = -1
-	go d.watch()
-	return d, nil
-}
-
-// NewConsulDiscoveryTemplate returns a new ConsulDiscovery template.
-func NewConsulDiscoveryTemplate(basePath string, consulAddr []string, options *store.Config) (*ConsulDiscovery, error) {
-	if basePath[0] == '/' {
-		basePath = basePath[1:]
-	}
-
-	if len(basePath) > 1 && strings.HasSuffix(basePath, "/") {
-		basePath = basePath[:len(basePath)-1]
-	}
-
-	kv, err := libkv.NewStore(store.CONSUL, consulAddr, options)
-	if err != nil {
-		log.Infof("cannot create store: %v", err)
-		return nil, err
-	}
-
-	return NewConsulDiscoveryStore(basePath, kv)
+	return d, err
 }
 
 // Clone clones this ServiceDiscovery with new servicePath.
 func (d *ConsulDiscovery) Clone(servicePath string) (client.ServiceDiscovery, error) {
-	return NewConsulDiscoveryStore(d.basePath+"/"+servicePath, d.kv)
+	cd := &ConsulDiscovery{pairs: d.pairs}
+	return cd, nil
 }
 
 // SetFilter sets the filer.

@@ -1,6 +1,10 @@
 package serverplugin
 
 import (
+	"context"
+	. "github.com/darrennong/rpcx-consul/client"
+	"github.com/smallnest/rpcx/client"
+	"log"
 	"testing"
 	"time"
 
@@ -11,27 +15,34 @@ import (
 func TestConsulRegistry(t *testing.T) {
 	s := server.NewServer()
 	r := NewConsulRegisterPlugin(
-		WithConsulServiceAddress("tcp@127.0.0.1:8972"),
+		WithConsulServiceAddress("tcp@192.168.0.28:8081"),
 		WithConsulServers([]string{"127.0.0.1:8500"}),
 		WithConsulBasePath("/rpcx_test"),
 		WithConsulMetrics(metrics.NewRegistry()),
 		WithConsulUpdateInterval(time.Minute),
 	)
-	err := r.Start()
-	if err != nil {
-		return
-	}
 	s.Plugins.Add(r)
 
 	s.RegisterName("Arith", new(Arith), "")
-	go s.Serve("tcp", "127.0.0.1:8972")
 	defer s.Close()
+	s.Serve("tcp", "192.168.0.28:8081")
+}
 
-	if len(r.Services) != 1 {
-		t.Fatal("failed to register services in consul")
+func TestServiceDiscover(t *testing.T) {
+
+	d, _ := NewConsulDiscovery("spiritV2", "Arith", []string{"127.0.0.1:8500"}, nil)
+	xclient := client.NewXClient("Arith", client.Failtry, client.RandomSelect, d, client.DefaultOption)
+	defer xclient.Close()
+
+	args := &Args{
+		A: 10,
+		B: 20,
+	}
+	reply := &Reply{}
+	err := xclient.Call(context.Background(), "Mul", args, reply)
+	if err != nil {
+		log.Fatalf("failed to call: %v", err)
 	}
 
-	if err := r.Stop(); err != nil {
-		t.Fatal(err)
-	}
+	log.Printf("%d * %d = %d", args.A, args.B, reply.C)
 }
