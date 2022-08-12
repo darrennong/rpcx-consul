@@ -30,8 +30,8 @@ func TestConsulRegistry(t *testing.T) {
 
 func TestServiceDiscover(t *testing.T) {
 
-	d, _ := NewConsulDiscovery("spiritV2", "Arith", []string{"127.0.0.1:8500"}, nil)
-	xclient := client.NewXClient("Arith", client.Failtry, client.RandomSelect, d, client.DefaultOption)
+	d, _ := NewConsulDiscovery("spiritV2", "LogHouse", []string{"127.0.0.1:8500"}, nil)
+	xclient := client.NewXClient("LogHouse", client.Failtry, client.RandomSelect, d, client.DefaultOption)
 	defer xclient.Close()
 
 	args := &Args{
@@ -39,10 +39,10 @@ func TestServiceDiscover(t *testing.T) {
 		B: 20,
 	}
 	reply := &Reply{}
-	err := xclient.Call(context.Background(), "Mul", args, reply)
+	err := xclient.Call(context.Background(), "StartLog", args, reply)
 	if err != nil {
 		log.Fatalf("failed to call: %v", err)
 	}
 
-	log.Printf("%d * %d = %d", args.A, args.B, reply.C)
+	log.Printf("%d * %d = %v", args.A, args.B, reply)
 }
