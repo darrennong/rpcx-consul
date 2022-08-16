@@ -7,7 +7,6 @@ import (
 	"net"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	metrics "github.com/rcrowley/go-metrics"
@@ -33,8 +32,7 @@ type ConsulRegisterPlugin struct {
 	Metrics metrics.Registry
 	// Registered services
 	Services       []string
-	metasLock      sync.RWMutex
-	metas          map[string]string
+	Tags           []string
 	UpdateInterval time.Duration
 
 	Options *store.Config
@@ -51,6 +49,12 @@ type ConsulOpt func(*ConsulRegisterPlugin)
 func WithConsulServers(consulServers []string) ConsulOpt {
 	return func(o *ConsulRegisterPlugin) {
 		o.ConsulServers = consulServers
+	}
+}
+
+func WithConsulTags(tags ...string) ConsulOpt {
+	return func(o *ConsulRegisterPlugin) {
+		o.Tags = tags
 	}
 }
 
@@ -193,16 +197,11 @@ func (p *ConsulRegisterPlugin) Register(name string, rcvr interface{}, metadata 
 	if err != nil {
 		log.Fatal("consul client error : ", err)
 	}
-	tags, i := make([]string, len(p.metas)), 0
-	for _, v := range p.metas {
-		tags[i] = v
-		i++
-	}
 	// 创建注册到consul的服务到
 	p.registration.ID = p.NodeId           // 服务节点的名称
 	p.registration.Name = name             // 服务名称
 	p.registration.Port = p.ServicePort    // 服务端口
-	p.registration.Tags = tags             // tag，可以为空
+	p.registration.Tags = p.Tags           // tag，可以为空
 	p.registration.Address = p.ServiceHost // 服务 IP 要确保consul可以访问这个ip
 	p.registration.SocketPath = p.ServiceAddress
 
