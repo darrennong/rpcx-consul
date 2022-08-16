@@ -29,8 +29,8 @@ type ConsulRegisterPlugin struct {
 	// consul addresses
 	ConsulServers []string
 	// base path for rpcx server, for example com/example/rpcx
-	BasePath string
-	Metrics  metrics.Registry
+	NodeId  string
+	Metrics metrics.Registry
 	// Registered services
 	Services       []string
 	metasLock      sync.RWMutex
@@ -72,9 +72,9 @@ func WithConsulServiceAddress(serviceAddress string) ConsulOpt {
 	}
 }
 
-func WithConsulBasePath(basePath string) ConsulOpt {
+func WithConsulNodeId(basePath string) ConsulOpt {
 	return func(o *ConsulRegisterPlugin) {
-		o.BasePath = basePath
+		o.NodeId = basePath
 	}
 }
 
@@ -193,13 +193,17 @@ func (p *ConsulRegisterPlugin) Register(name string, rcvr interface{}, metadata 
 	if err != nil {
 		log.Fatal("consul client error : ", err)
 	}
-
+	tags, i := make([]string, len(p.metas)), 0
+	for _, v := range p.metas {
+		tags[i] = v
+		i++
+	}
 	// 创建注册到consul的服务到
-	p.registration.ID = "server_1"                   // 服务节点的名称
-	p.registration.Name = name                       // 服务名称
-	p.registration.Port = p.ServicePort              // 服务端口
-	p.registration.Tags = []string{p.ServiceAddress} // tag，可以为空
-	p.registration.Address = p.ServiceHost           // 服务 IP 要确保consul可以访问这个ip
+	p.registration.ID = p.NodeId           // 服务节点的名称
+	p.registration.Name = name             // 服务名称
+	p.registration.Port = p.ServicePort    // 服务端口
+	p.registration.Tags = tags             // tag，可以为空
+	p.registration.Address = p.ServiceHost // 服务 IP 要确保consul可以访问这个ip
 	p.registration.SocketPath = p.ServiceAddress
 
 	// 增加consul健康检查回调函数
