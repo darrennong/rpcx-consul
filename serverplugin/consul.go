@@ -211,8 +211,8 @@ func (p *ConsulRegisterPlugin) Register(name string, rcvr interface{}, metadata 
 	check.Name = p.ServiceAddress
 	check.HTTP = fmt.Sprintf("http://%s:%d/health", p.registration.Address, p.registration.Port)
 	check.Timeout = "5s"
-	check.Interval = "5s" // 健康检查间隔
-	//check.DeregisterCriticalServiceAfter = "300s" // 故障检查失败30s后 consul自动将注册服务删除
+	check.Interval = "5s"                         // 健康检查间隔
+	check.DeregisterCriticalServiceAfter = "300s" // 故障检查失败30s后 consul自动将注册服务删除
 	p.registration.Check = check
 
 	// 注册服务到consul
